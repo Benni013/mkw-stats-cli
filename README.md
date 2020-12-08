@@ -1,8 +1,8 @@
 # wiimmfi-cli
 command line interface to display the stats of a wiimmfi room in Mario Kart Wii
 
-- [REQUIREMENTS](#requirements)
-- [USAGE](#usage)
+* [REQUIREMENTS](#requirements)
+* [USAGE](#usage)
 
 ## Requirements
 * Python version 3.6 or newer
