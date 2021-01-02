@@ -113,42 +113,40 @@ def parseRoom(room_id, fc, refresh):
                 br_avg += 5000
         vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
         br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
-    loginregion, host_index = '—', 0
+    loginregion, ihost = '—', 0
     for i in range(0, len(table['role'])):
         if 'HOST' in table['role'][i]:
             loginregion = table['loginregion'][i]
-            host_index = i
+            ihost = i
             break
     for lr in table['loginregion']:
         if lr != loginregion:
             loginregion = '—'
 
-    # calculate max loss and max gain rating
+    # calculate Max loss and Max gain line
     try:
-        player_index = table[table['friend code'] == fc].index.item()
-        player_vr = table.iloc[player_index]['versuspoints']
-        player_br = table.iloc[player_index]['battlepoints']
+        iplayer = table[table['friend code'] == fc].index.item()
+        player_vr = table.iloc[iplayer]['versuspoints']
+        player_br = table.iloc[iplayer]['battlepoints']
         min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
         for i in range(0, len(table)):
             try:
-                if i != player_index and 'viewer' not in table[i]['role']:
+                if i != iplayer and 'viewer' not in table[i]['role']:
                     min_vr -= calcVR(table.iloc[i]['versuspoints'], player_vr)
                     max_vr += calcVR(player_vr, table.iloc[i]['versuspoints'])
                     min_br -= calcVR(table.iloc[i]['battlepoints'], player_br)
                     max_br += calcVR(player_br, table.iloc[i]['battlepoints'])
             except TypeError:
-                min_vr -= 0
-                max_vr += 0
-                min_br -= 0
-                max_br += 0
-        table = table.append({'friend code': 'Max loss', 'role': table['role'].iloc[player_index], 'loginregion': table['loginregion'].iloc[player_index], 'room,match': table['room,match'].iloc[player_index], 'world': table['world'].iloc[player_index], 'connfail': table['connfail'].iloc[player_index], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'].iloc[player_index]}, ignore_index=True)
-        table = table.append({'friend code': 'Max gain', 'role': table['role'].iloc[player_index], 'loginregion': table['loginregion'].iloc[player_index], 'room,match': table['room,match'].iloc[player_index], 'world': table['world'].iloc[player_index], 'connfail': table['connfail'].iloc[player_index], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'].iloc[player_index]}, ignore_index=True)
+                pass
+        table = table.append({'friend code': 'Max loss', 'role': table['role'].iloc[iplayer], 'loginregion': table['loginregion'].iloc[iplayer], 'room,match': table['room,match'].iloc[iplayer], 'world': table['world'].iloc[iplayer], 'connfail': table['connfail'].iloc[iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'].iloc[iplayer]}, ignore_index=True)
+        table = table.append({'friend code': 'Max gain', 'role': table['role'].iloc[iplayer], 'loginregion': table['loginregion'].iloc[iplayer], 'room,match': table['room,match'].iloc[iplayer], 'world': table['world'].iloc[iplayer], 'connfail': table['connfail'].iloc[iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'].iloc[iplayer]}, ignore_index=True)
         extra_line_count += 2
     except ValueError:
         print('The sought-after player is no longer in this room')
+        extra_line_count += 1
 
-    # output data
-    table = table.append({'friend code': 'Average', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'].iloc[host_index], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
+    # output table
+    table = table.append({'friend code': 'Average', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'].iloc[ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
     extra_line_count += 1
     print(table)
 
