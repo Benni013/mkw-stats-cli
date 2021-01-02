@@ -136,6 +136,11 @@ def parseRoom(room_id, fc, refresh):
                     max_vr += calcVR(player_vr, table.iloc[i]['versuspoints'])
                     min_br -= calcVR(table.iloc[i]['battlepoints'], player_br)
                     max_br += calcVR(player_br, table.iloc[i]['battlepoints'])
+                    if '1. ' in table['Mii name'][i] and '2. ' in table['Mii name'][i]:
+                        min_vr -= calcVR(5000, player_vr)
+                        max_vr += calcVR(player_vr, 5000)
+                        min_br -= calcVR(5000, player_br)
+                        max_br += calcVR(player_br, 5000)
             except TypeError:
                 pass
         table = table.append({'friend code': 'Max loss', 'role': table['role'].iloc[iplayer], 'loginregion': table['loginregion'].iloc[iplayer], 'room,match': table['room,match'].iloc[iplayer], 'world': table['world'].iloc[iplayer], 'connfail': table['connfail'].iloc[iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'].iloc[iplayer]}, ignore_index=True)
