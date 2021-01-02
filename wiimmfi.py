@@ -92,8 +92,8 @@ def inputNumber(inamefc):
 
 def parseRoom(room_id, fc, refresh):
     url = rf'https://wiimmfi.de/stats/mkw/room/{room_id}'
-    tables = pandas.read_html(url, header=1, encoding='utf-8')  # Returns list of all tables on page
-    table = tables[0]  # Select table of interest
+    tables = pandas.read_html(url, header=1, encoding='utf-8')
+    table = tables[0]
     extra_line_count = 1
 
     # calculate Average line
@@ -111,15 +111,14 @@ def parseRoom(room_id, fc, refresh):
             br_avg += 5000
     vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
     br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
+    if vr_avg == 5000 and br_avg == 5000:
+        vr_avg, br_avg = '—', '—'
     loginregion, ihost = '—', 0
     for i in range(0, len(table['role'])):
         if 'HOST' in table['role'][i]:
             loginregion = table['loginregion'][i]
             ihost = i
             break
-    for lr in table['loginregion']:
-        if lr != loginregion:
-            loginregion = '—'
 
     # calculate Max loss and Max gain line
     try:
