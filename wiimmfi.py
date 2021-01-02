@@ -19,15 +19,15 @@ def main():
     print(args)
     if args.friendcode:
         if re.match(r'\d{4}-\d{4}-\d{4}', args.friendcode[0]) is not None:
-            roomID = getRoomIDByFC(args.friendcode[0])
-            parseRoom(roomID, args.friendcode[0], args.refresh)
+            room_id = getRoomIDByFC(args.friendcode[0])
+            parseRoom(room_id, args.friendcode[0], args.refresh)
         else:
             print('Format "XXXX-XXXX-XXXX" required', file=sys.stderr)
             exit(1)
     elif args.name:
         fc = getFcByName(args.name[0])
-        roomID = getRoomIDByFC(fc)
-        parseRoom(roomID, fc, args.refresh)
+        room_id = getRoomIDByFC(fc)
+        parseRoom(room_id, fc, args.refresh)
     else:
         parser.print_usage()
 
@@ -90,10 +90,11 @@ def inputNumber(inamefc):
         inputNumber(inamefc)
 
 
-def parseRoom(roomID, fc, refresh):
-    url = rf'https://wiimmfi.de/stats/mkw/room/{roomID}'
+def parseRoom(room_id, fc, refresh):
+    url = rf'https://wiimmfi.de/stats/mkw/room/{room_id}'
     tables = pandas.read_html(url, header=1, encoding='utf-8')  # Returns list of all tables on page
     table = tables[0]  # Select table of interest
+    extra_line_count = 0
 
     # calculate Average line
     vr_avg, br_avg = '—', '—'
@@ -112,39 +113,51 @@ def parseRoom(roomID, fc, refresh):
                 br_avg += 5000
         vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
         br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
-    loginregion = '—'
+    loginregion, host_index = '—', 0
     for i in range(0, len(table['role'])):
         if 'HOST' in table['role'][i]:
             loginregion = table['loginregion'][i]
+            host_index = i
             break
     for lr in table['loginregion']:
         if lr != loginregion:
             loginregion = '—'
 
     # calculate max loss and max gain rating
-    playerIndex = table[table['friend code'] == fc].index.item()
-    playerVR = table.iloc[playerIndex]['versuspoints']
-    playerBR = table.iloc[playerIndex]['battlepoints']
-    minVR, maxVR, minBR, maxBR = 0, 0, 0, 0
-    for i in range(0, len(table)):
-        if i != playerIndex:
-            minVR -= calcVR(table.iloc[i]['versuspoints'], playerVR)
-            maxVR += calcVR(playerVR, table.iloc[i]['versuspoints'])
-            minBR -= calcVR(table.iloc[i]['battlepoints'], playerBR)
-            maxBR += calcVR(playerBR, table.iloc[i]['battlepoints'])
+    try:
+        player_index = table[table['friend code'] == fc].index.item()
+        player_vr = table.iloc[player_index]['versuspoints']
+        player_br = table.iloc[player_index]['battlepoints']
+        min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
+        for i in range(0, len(table)):
+            try:
+                if i != player_index and 'viewer' not in table[i]['role']:
+                    min_vr -= calcVR(table.iloc[i]['versuspoints'], player_vr)
+                    max_vr += calcVR(player_vr, table.iloc[i]['versuspoints'])
+                    min_br -= calcVR(table.iloc[i]['battlepoints'], player_br)
+                    max_br += calcVR(player_br, table.iloc[i]['battlepoints'])
+            except TypeError:
+                min_vr -= 0
+                max_vr += 0
+                min_br -= 0
+                max_br += 0
+        table = table.append({'friend code': 'Max loss', 'role': table['role'].iloc[player_index], 'loginregion': table['loginregion'].iloc[player_index], 'room,match': table['room,match'].iloc[player_index], 'world': table['world'].iloc[player_index], 'connfail': table['connfail'].iloc[player_index], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'].iloc[player_index]}, ignore_index=True)
+        table = table.append({'friend code': 'Max gain', 'role': table['role'].iloc[player_index], 'loginregion': table['loginregion'].iloc[player_index], 'room,match': table['room,match'].iloc[player_index], 'world': table['world'].iloc[player_index], 'connfail': table['connfail'].iloc[player_index], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'].iloc[player_index]}, ignore_index=True)
+        extra_line_count += 2
+    except ValueError:
+        print('The sought-after player is no longer in this room')
 
     # output data
-    table = table.append({'friend code': 'Max loss', 'role': table['role'].iloc[playerIndex], 'loginregion': table['loginregion'].iloc[playerIndex], 'room,match': table['room,match'].iloc[playerIndex], 'world': table['world'].iloc[playerIndex], 'connfail': table['connfail'].iloc[playerIndex], 'versuspoints': minVR, 'battlepoints': minBR, 'Mii name': table['Mii name'].iloc[playerIndex]}, ignore_index=True)
-    table = table.append({'friend code': 'Max gain', 'role': table['role'].iloc[playerIndex], 'loginregion': table['loginregion'].iloc[playerIndex], 'room,match': table['room,match'].iloc[playerIndex], 'world': table['world'].iloc[playerIndex], 'connfail': table['connfail'].iloc[playerIndex], 'versuspoints': maxVR, 'battlepoints': maxBR, 'Mii name': table['Mii name'].iloc[playerIndex]}, ignore_index=True)
-    table = table.append({'friend code': 'Average', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'].iloc[playerIndex], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
+    table = table.append({'friend code': 'Average', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'].iloc[host_index], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
+    extra_line_count += 1
     print(table)
 
     if refresh:
         try:
             time.sleep(10)
-            sys.stdout.write('\x1B[1A\x1B[2K' * (len(table.index) + 1))
+            sys.stdout.write('\x1B[1A\x1B[2K' * (len(table.index) + extra_line_count))
             sys.stdout.flush()
-            parseRoom(roomID, fc, refresh)
+            parseRoom(room_id, fc, refresh)
         except KeyboardInterrupt:
             print(' Exiting...')
             return table
@@ -152,8 +165,8 @@ def parseRoom(roomID, fc, refresh):
 
 
 # vr function from http://wiki.tockdom.com/wiki/Player_Rating
-def calcVR(Pw, Pl):
-    D = Pl - Pw
+def calcVR(P_Winner, P_Loser):
+    D = P_Loser - P_Winner
     E = k(D)
     return round(E)
 
