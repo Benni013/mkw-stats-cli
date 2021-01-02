@@ -94,7 +94,7 @@ def parseRoom(room_id, fc, refresh):
     url = rf'https://wiimmfi.de/stats/mkw/room/{room_id}'
     tables = pandas.read_html(url, header=1, encoding='utf-8')  # Returns list of all tables on page
     table = tables[0]  # Select table of interest
-    extra_line_count = 0
+    extra_line_count = 1
 
     # calculate Average line
     vr_avg, br_avg = '—', '—'
@@ -131,7 +131,7 @@ def parseRoom(room_id, fc, refresh):
         min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
         for i in range(0, len(table)):
             try:
-                if i != iplayer and 'viewer' not in table[i]['role']:
+                if i != iplayer and ('viewer' not in table['role'][i]):
                     min_vr -= calcVR(table.iloc[i]['versuspoints'], player_vr)
                     max_vr += calcVR(player_vr, table.iloc[i]['versuspoints'])
                     min_br -= calcVR(table.iloc[i]['battlepoints'], player_br)
@@ -140,20 +140,18 @@ def parseRoom(room_id, fc, refresh):
                 pass
         table = table.append({'friend code': 'Max loss', 'role': table['role'].iloc[iplayer], 'loginregion': table['loginregion'].iloc[iplayer], 'room,match': table['room,match'].iloc[iplayer], 'world': table['world'].iloc[iplayer], 'connfail': table['connfail'].iloc[iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'].iloc[iplayer]}, ignore_index=True)
         table = table.append({'friend code': 'Max gain', 'role': table['role'].iloc[iplayer], 'loginregion': table['loginregion'].iloc[iplayer], 'room,match': table['room,match'].iloc[iplayer], 'world': table['world'].iloc[iplayer], 'connfail': table['connfail'].iloc[iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'].iloc[iplayer]}, ignore_index=True)
-        extra_line_count += 2
     except ValueError:
         print('The sought-after player is no longer in this room')
         extra_line_count += 1
 
     # output table
-    table = table.append({'friend code': 'Average', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'].iloc[ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
-    extra_line_count += 1
+    table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'].iloc[ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
     print(table)
 
     if refresh:
         try:
             time.sleep(10)
-            sys.stdout.write('\x1B[1A\x1B[2K' * (len(table.index) + extra_line_count))
+            sys.stdout.write('\x1B[1A\x1B[2K' * (len(table) + extra_line_count))
             sys.stdout.flush()
             parseRoom(room_id, fc, refresh)
         except KeyboardInterrupt:
@@ -166,7 +164,7 @@ def parseRoom(room_id, fc, refresh):
 def calcVR(P_Winner, P_Loser):
     D = P_Loser - P_Winner
     E = k(D)
-    return round(E)
+    return int(E)
 
 
 def f(x):
