@@ -97,22 +97,20 @@ def parseRoom(room_id, fc, refresh):
     extra_line_count = 1
 
     # calculate Average line
-    vr_avg, br_avg = '—', '—'
-    if str(table['versuspoints'][0]).isdigit() and str(table['battlepoints'][0]).isdigit():
-        vr_avg, br_avg, guest_count = 0, 0, 0
-        for vr, br, name in zip(table['versuspoints'], table['battlepoints'], table['Mii name']):
-            try:
-                vr_avg += vr
-                br_avg += br
-                if '1. ' in name and '2. ' in name:
-                    guest_count += 1
-                    vr_avg += 5000
-                    br_avg += 5000
-            except TypeError:
+    vr_avg, br_avg, guest_count = 0, 0, 0
+    for vr, br, name in zip(table['versuspoints'], table['battlepoints'], table['Mii name']):
+        try:
+            vr_avg += vr
+            br_avg += br
+            if '1. ' in name and '2. ' in name:
+                guest_count += 1
                 vr_avg += 5000
                 br_avg += 5000
-        vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
-        br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
+        except TypeError:
+            vr_avg += 5000
+            br_avg += 5000
+    vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
+    br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
     loginregion, ihost = '—', 0
     for i in range(0, len(table['role'])):
         if 'HOST' in table['role'][i]:
@@ -126,16 +124,16 @@ def parseRoom(room_id, fc, refresh):
     # calculate Max loss and Max gain line
     try:
         iplayer = table[table['friend code'] == fc].index.item()
-        player_vr = table.iloc[iplayer]['versuspoints']
-        player_br = table.iloc[iplayer]['battlepoints']
+        player_vr = table['versuspoints'][iplayer]
+        player_br = table['battlepoints'][iplayer]
         min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
         for i in range(0, len(table)):
             try:
                 if i != iplayer and ('viewer' not in table['role'][i]):
-                    min_vr -= calcVR(table.iloc[i]['versuspoints'], player_vr)
-                    max_vr += calcVR(player_vr, table.iloc[i]['versuspoints'])
-                    min_br -= calcVR(table.iloc[i]['battlepoints'], player_br)
-                    max_br += calcVR(player_br, table.iloc[i]['battlepoints'])
+                    min_vr -= calcVR(table['versuspoints'][i], player_vr)
+                    max_vr += calcVR(player_vr, table['versuspoints'][i])
+                    min_br -= calcVR(table['battlepoints'][i], player_br)
+                    max_br += calcVR(player_br, table['battlepoints'][i])
                     if '1. ' in table['Mii name'][i] and '2. ' in table['Mii name'][i]:
                         min_vr -= calcVR(5000, player_vr)
                         max_vr += calcVR(player_vr, 5000)
@@ -143,14 +141,14 @@ def parseRoom(room_id, fc, refresh):
                         max_br += calcVR(player_br, 5000)
             except TypeError:
                 pass
-        table = table.append({'friend code': 'Max loss', 'role': table['role'].iloc[iplayer], 'loginregion': table['loginregion'].iloc[iplayer], 'room,match': table['room,match'].iloc[iplayer], 'world': table['world'].iloc[iplayer], 'connfail': table['connfail'].iloc[iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'].iloc[iplayer]}, ignore_index=True)
-        table = table.append({'friend code': 'Max gain', 'role': table['role'].iloc[iplayer], 'loginregion': table['loginregion'].iloc[iplayer], 'room,match': table['room,match'].iloc[iplayer], 'world': table['world'].iloc[iplayer], 'connfail': table['connfail'].iloc[iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'].iloc[iplayer]}, ignore_index=True)
+        table = table.append({'friend code': 'Max loss', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
+        table = table.append({'friend code': 'Max gain', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
     except ValueError:
         print('The sought-after player is no longer in this room')
         extra_line_count += 1
 
     # output table
-    table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'].iloc[ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
+    table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
     print(table)
 
     if refresh:
