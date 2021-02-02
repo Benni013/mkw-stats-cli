@@ -195,7 +195,7 @@ def parseRoom(room_id, fc, selection, no_rows, refresh):
             break
 
     # calculate Max loss and Max gain line
-    iplayer = -1
+    iplayer, imin, imax = -1, -1, -1
     try:
         iplayer = table[table['friend code'] == fc].index.item()
         player_vr = table['versuspoints'][iplayer]
@@ -205,7 +205,6 @@ def parseRoom(room_id, fc, selection, no_rows, refresh):
             # separate guest with space
             name = table['Mii name'][i]
             if '1. ' in name and '2. ' in name:
-                # table['Mii name'][i] = table['Mii name'][i].replace('2. ', ' 2. ')
                 table.loc[table['Mii name'] == name, 'Mii name'] = name.replace('2. ', ' 2. ')
             # actual calculation
             try:
@@ -223,20 +222,20 @@ def parseRoom(room_id, fc, selection, no_rows, refresh):
                 pass
         table = table.append({'friend code': 'Max loss', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
         table = table.append({'friend code': 'Max gain', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
+        imin = table[table['friend code'] == 'Max loss'].index.item()
+        imax = table[table['friend code'] == 'Max gain'].index.item()
     except ValueError:
         print('The sought-after player is no longer in this room')
         extra_line_count += 1
     table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
+    iavg = table[table['friend code'] == 'Average rating'].index.item()
 
     # output table
-    # pandas.set_option('display.max_rows', None)
-    # pandas.set_option('display.max_columns', None)
     output = table.iloc[:, selection].to_string().splitlines()
-    imin = table[table['friend code'] == 'Max loss'].index.item()
-    imax = table[table['friend code'] == 'Max gain'].index.item()
-    iavg = table[table['friend code'] == 'Average rating'].index.item()
     no_color, no_min, no_max, no_avg = no_rows
+    # This part of the code is a complete mess, but it works.
     for i in range(0, len(output)):
+        # If the player is no longer in the room, iplayer will be equal to -1, so the header of the table will be blue. It's not a bug, it's a feature
         if i - 1 == iplayer:
             print(f'{colors.fg.brightblue}{output[i]}{colors.reset}') if not no_color else print(output[i])
         elif i - 1 == imin:
