@@ -1,11 +1,11 @@
 #!/usr/bin/python
 import argparse
 import re
-import sys
-import time
 import urllib.request
 
 import pandas
+import sys
+import time
 
 
 class colors:
@@ -166,104 +166,108 @@ def inputNumber(inamefc):
 
 def parseRoom(room_id, fc, selection, no_rows, refresh):
     url = rf'https://wiimmfi.de/stats/mkw/room/{room_id}'
-    tables = pandas.read_html(url, header=1, encoding='utf-8')
-    table = tables[0]
-    extra_line_count = 1
+    try:
+        tables = pandas.read_html(url, header=1, encoding='utf-8')
+        table = tables[0]
+        extra_line_count = 1
 
-    # calculate Average line
-    vr_avg, br_avg, guest_count = 0, 0, 0
-    for vr, br, name in zip(table['versuspoints'], table['battlepoints'], table['Mii name']):
-        try:
-            vr_avg += vr
-            br_avg += br
-            if '1. ' in name and '2. ' in name:
-                guest_count += 1
+        # calculate Average line
+        vr_avg, br_avg, guest_count = 0, 0, 0
+        for vr, br, name in zip(table['versuspoints'], table['battlepoints'], table['Mii name']):
+            try:
+                vr_avg += vr
+                br_avg += br
+                if '1. ' in name and '2. ' in name:
+                    guest_count += 1
+                    vr_avg += 5000
+                    br_avg += 5000
+            except TypeError:
                 vr_avg += 5000
                 br_avg += 5000
-        except TypeError:
-            vr_avg += 5000
-            br_avg += 5000
-    vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
-    br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
-    if vr_avg == 5000 and br_avg == 5000:
-        vr_avg, br_avg = '—', '—'
-    loginregion, ihost = '—', 0
-    for i in range(0, len(table['role'])):
-        if 'HOST' in table['role'][i]:
-            loginregion = table['loginregion'][i]
-            ihost = i
-            break
+        vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
+        br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
+        if vr_avg == 5000 and br_avg == 5000:
+            vr_avg, br_avg = '—', '—'
+        loginregion, ihost = '—', 0
+        for i in range(0, len(table['role'])):
+            if 'HOST' in table['role'][i]:
+                loginregion = table['loginregion'][i]
+                ihost = i
+                break
 
-    # calculate Max loss and Max gain line
-    iplayer, imin, imax = -1, -1, -1
-    try:
-        iplayer = table[table['friend code'] == fc].index.item()
-        player_vr = table['versuspoints'][iplayer]
-        player_br = table['battlepoints'][iplayer]
-        min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
-        for i in range(0, len(table)):
-            # separate guest with space
-            name = table['Mii name'][i]
-            if '1. ' in name and '2. ' in name:
-                table.loc[table['Mii name'] == name, 'Mii name'] = name.replace('2. ', ' 2. ')
-            # actual calculation
-            try:
-                if i != iplayer and ('viewer' not in table['role'][i]):
-                    min_vr -= calcVR(table['versuspoints'][i], player_vr)
-                    max_vr += calcVR(player_vr, table['versuspoints'][i])
-                    min_br -= calcVR(table['battlepoints'][i], player_br)
-                    max_br += calcVR(player_br, table['battlepoints'][i])
-                    if '1. ' in name and '2. ' in name:
-                        min_vr -= calcVR(5000, player_vr)
-                        max_vr += calcVR(player_vr, 5000)
-                        min_br -= calcVR(5000, player_br)
-                        max_br += calcVR(player_br, 5000)
-            except TypeError:
-                pass
-        table = table.append({'friend code': 'Max loss', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
-        table = table.append({'friend code': 'Max gain', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
-        imin = table[table['friend code'] == 'Max loss'].index.item()
-        imax = table[table['friend code'] == 'Max gain'].index.item()
-    except ValueError:
-        print('The sought-after player is no longer in this room')
-        extra_line_count += 1
-    table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
-    iavg = table[table['friend code'] == 'Average rating'].index.item()
-
-    # output table
-    output = table.iloc[:, selection].to_string().splitlines()
-    no_color, no_min, no_max, no_avg = no_rows
-    # This part of the code is a complete mess, but it works.
-    for i in range(0, len(output)):
-        # If the player is no longer in the room, iplayer will be equal to -1, so the header of the table will be blue. It's not a bug, it's a feature
-        if i - 1 == iplayer:
-            print(f'{colors.fg.brightblue}{output[i]}{colors.reset}') if not no_color else print(output[i])
-        elif i - 1 == imin:
-            if not no_min:
-                print(f'{colors.fg.red}{output[i]}{colors.reset}') if not no_color else print(output[i])
-            else:
-                extra_line_count -= 1
-        elif i - 1 == imax:
-            if not no_max:
-                print(f'{colors.fg.green}{output[i]}{colors.reset}') if not no_color else print(output[i])
-            else:
-                extra_line_count -= 1
-        elif i - 1 == iavg:
-            if not no_avg:
-                print(f'{colors.fg.yellow}{output[i]}{colors.reset}') if not no_color else print(output[i])
-            else:
-                extra_line_count -= 1
-        else:
-            print(output[i])
-
-    if refresh:
+        # calculate Max loss and Max gain line
+        iplayer, imin, imax = -1, -1, -1
         try:
-            time.sleep(10)
-            sys.stdout.write('\x1B[1A\x1B[2K' * (len(table) + extra_line_count))
-            sys.stdout.flush()
-            parseRoom(room_id, fc, selection, no_rows, refresh)
-        except KeyboardInterrupt:
-            print('\nExiting...')
+            iplayer = table[table['friend code'] == fc].index.item()
+            player_vr = table['versuspoints'][iplayer]
+            player_br = table['battlepoints'][iplayer]
+            min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
+            for i in range(0, len(table)):
+                # separate guest with space
+                name = table['Mii name'][i]
+                if '1. ' in name and '2. ' in name:
+                    table.loc[table['Mii name'] == name, 'Mii name'] = name.replace('2. ', ' 2. ')
+                # actual calculation
+                try:
+                    if i != iplayer and ('viewer' not in table['role'][i] or 'connect' not in table['role'][i]):
+                        min_vr -= calcVR(table['versuspoints'][i], player_vr)
+                        max_vr += calcVR(player_vr, table['versuspoints'][i])
+                        min_br -= calcVR(table['battlepoints'][i], player_br)
+                        max_br += calcVR(player_br, table['battlepoints'][i])
+                        if '1. ' in name and '2. ' in name:
+                            min_vr -= calcVR(5000, player_vr)
+                            max_vr += calcVR(player_vr, 5000)
+                            min_br -= calcVR(5000, player_br)
+                            max_br += calcVR(player_br, 5000)
+                except TypeError:
+                    pass
+            table = table.append({'friend code': 'Max loss', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
+            table = table.append({'friend code': 'Max gain', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
+            imin = table[table['friend code'] == 'Max loss'].index.item()
+            imax = table[table['friend code'] == 'Max gain'].index.item()
+        except ValueError:
+            print('The sought-after player is no longer in this room')
+            extra_line_count += 1
+        table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
+        iavg = table[table['friend code'] == 'Average rating'].index.item()
+
+        # output table
+        output = table.iloc[:, selection].to_string().splitlines()
+        no_color, no_min, no_max, no_avg = no_rows
+        # This part of the code is a complete mess, but it works.
+        for i in range(0, len(output)):
+            # If the player is no longer in the room, iplayer will be equal to -1, so the header of the table will be blue. It's not a bug, it's a feature
+            if i - 1 == iplayer:
+                print(f'{colors.fg.brightblue}{output[i]}{colors.reset}') if not no_color else print(output[i])
+            elif i - 1 == imin:
+                if not no_min:
+                    print(f'{colors.fg.red}{output[i]}{colors.reset}') if not no_color else print(output[i])
+                else:
+                    extra_line_count -= 1
+            elif i - 1 == imax:
+                if not no_max:
+                    print(f'{colors.fg.green}{output[i]}{colors.reset}') if not no_color else print(output[i])
+                else:
+                    extra_line_count -= 1
+            elif i - 1 == iavg:
+                if not no_avg:
+                    print(f'{colors.fg.yellow}{output[i]}{colors.reset}') if not no_color else print(output[i])
+                else:
+                    extra_line_count -= 1
+            else:
+                print(output[i])
+
+        if refresh:
+            try:
+                time.sleep(10)
+                sys.stdout.write('\x1B[1A\x1B[2K' * (len(table) + extra_line_count))
+                sys.stdout.flush()
+                parseRoom(room_id, fc, selection, no_rows, refresh)
+            except KeyboardInterrupt:
+                print('\nExiting...')
+    except ImportError:
+        print("The room does not exist")
+        exit(1)
 
 
 # vr function from http://wiki.tockdom.com/wiki/Player_Rating
