@@ -1,11 +1,11 @@
 #!/usr/bin/python
 import argparse
 import re
+import sys
+import time
 import urllib.request
 
 import pandas
-import sys
-import time
 
 
 class colors:
@@ -70,7 +70,6 @@ def main():
     parser.add_argument('--no-color', default=False, help='disable colored output', action='store_true')
     parser.add_argument('-r', '--refresh', default=False, help='set automatic refresh (every 10s)', action='store_true')
     args = parser.parse_args()
-    print(args)
     # process user input
     selection = [0, 1, 2, 3, 4, 5, 6, 7, 8]
     disable = args.no_color, args.no_min, args.no_max, args.no_avg
@@ -92,14 +91,14 @@ def main():
     if args.friendcode:
         if re.match(r'^\d{4}-\d{4}-\d{4}$', args.friendcode[0]) is not None:
             room_id = getRoomIDByFC(args.friendcode[0])
-            parseRoom(room_id, args.friendcode[0], selection, disable, args.refresh)
+            out(room_id, args.friendcode[0], selection, disable, args.refresh)
         else:
             print('Format "XXXX-XXXX-XXXX" required', file=sys.stderr)
             exit(1)
     elif args.name:
         fc = getFcByName(args.name[0])
         room_id = getRoomIDByFC(fc)
-        parseRoom(room_id, fc, selection, disable, args.refresh)
+        out(room_id, fc, selection, disable, args.refresh)
     else:
         parser.print_usage()
 
@@ -164,7 +163,7 @@ def inputNumber(inamefc):
         inputNumber(inamefc)
 
 
-def parseRoom(room_id, fc, selection, no_rows, refresh):
+def parseRoom(room_id, fc, selection, no_rows):
     url = rf'https://wiimmfi.de/stats/mkw/room/{room_id}'
     try:
         tables = pandas.read_html(url, header=1, encoding='utf-8')
@@ -204,7 +203,7 @@ def parseRoom(room_id, fc, selection, no_rows, refresh):
             min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
             for i in range(0, len(table)):
                 # separate guest with space
-                name = table['Mii name'][i]
+                name = str(table['Mii name'][i])
                 if '1. ' in name and '2. ' in name:
                     table.loc[table['Mii name'] == name, 'Mii name'] = name.replace('2. ', ' 2. ')
                 # actual calculation
@@ -256,18 +255,23 @@ def parseRoom(room_id, fc, selection, no_rows, refresh):
                     extra_line_count -= 1
             else:
                 print(output[i])
-
-        if refresh:
-            try:
-                time.sleep(10)
-                sys.stdout.write('\x1B[1A\x1B[2K' * (len(table) + extra_line_count))
-                sys.stdout.flush()
-                parseRoom(room_id, fc, selection, no_rows, refresh)
-            except KeyboardInterrupt:
-                print('\nExiting...')
+        return len(table) + extra_line_count
     except ImportError:
         print("The room does not exist")
         exit(1)
+
+
+def out(room_id, fc, selection, disable, refresh):
+    line_count = parseRoom(room_id, fc, selection, disable)
+    while refresh:
+        try:
+            time.sleep(10)
+            sys.stdout.write('\x1B[1A\x1B[2K' * line_count)
+            sys.stdout.flush()
+            line_count = parseRoom(room_id, fc, selection, disable)
+        except KeyboardInterrupt:
+            print('\nExiting...')
+            exit(0)
 
 
 # vr function from http://wiki.tockdom.com/wiki/Player_Rating
