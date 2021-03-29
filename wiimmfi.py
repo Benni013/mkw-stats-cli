@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 import argparse
 import re
 import sys
@@ -59,7 +59,7 @@ class colors:
 
 def main():
     parser = argparse.ArgumentParser(description='CLI MKWii Wiimmfi Statistics\n')
-    parser.add_argument('-v', '--version', action='version', version='0.0.3')
+    parser.add_argument('-v', '--version', action='version', version='0.1')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-fc', '--friendcode', help='use friend code', nargs=1)
     group.add_argument('-n', '--name', help='use name', nargs=1)
