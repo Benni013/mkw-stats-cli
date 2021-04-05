@@ -59,7 +59,7 @@ class colors:
 
 def main():
     parser = argparse.ArgumentParser(description='CLI MKWii Wiimmfi Statistics\n')
-    parser.add_argument('-v', '--version', action='version', version='0.1')
+    parser.add_argument('-v', '--version', action='version', version='0.1.1')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-fc', '--friendcode', help='use friend code', nargs=1)
     group.add_argument('-n', '--name', help='use name', nargs=1)
@@ -167,6 +167,9 @@ def parseRoom(room_id, fc, selection, no_rows):
     url = rf'https://wiimmfi.de/stats/mkw/room/{room_id}'
     try:
         tables = pandas.read_html(url, header=1, encoding='utf-8')
+        if len(tables) == 0:
+            print("The room does not exist")
+            exit(1)
         table = tables[0]
         extra_line_count = 1
 
@@ -208,7 +211,7 @@ def parseRoom(room_id, fc, selection, no_rows):
                     table.loc[table['Mii name'] == name, 'Mii name'] = name.replace('2. ', ' 2. ')
                 # actual calculation
                 try:
-                    if i != iplayer and ('viewer' not in table['role'][i] or 'connect' not in table['role'][i]):
+                    if i != iplayer and ('viewer' not in table['role'][i] and 'connect' not in table['role'][i]):
                         min_vr -= calcVR(table['versuspoints'][i], player_vr)
                         max_vr += calcVR(player_vr, table['versuspoints'][i])
                         min_br -= calcVR(table['battlepoints'][i], player_br)
@@ -257,8 +260,7 @@ def parseRoom(room_id, fc, selection, no_rows):
                 print(output[i])
         return len(table) + extra_line_count
     except ImportError:
-        print("The room does not exist")
-        exit(1)
+        return 0
 
 
 def out(room_id, fc, selection, disable, refresh):
