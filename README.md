@@ -1,16 +1,20 @@
 # wiimmfi-cli
-command line interface to display the stats of a wiimmfi room in Mario Kart Wii
+command-line interface to display the stats of a Wiimmfi room in Mario Kart Wii
 
 * [REQUIREMENTS](#requirements)
 * [USAGE](#usage)
 
 ## Requirements
-* Python version 3.6 or newer
+* Python version 3.7.1 and above
 #### Python libraries
-* pandas
+* [pandas and its dependencies](https://pandas.pydata.org/docs/getting_started/install.html):
+  * beautifulsoup4
+  * html5lib or lxml
+  * numexpr (recommended)
+  * bottleneck (recommended)
 
 ## Usage
-`./wiimmfi.py (-fc FRIENDCODE | -n NAME) [-c COLUMNS] [--no-min] [--no-max] [--no-avg] [--no-color] [-r] [-h] [-v]`
+`./wiimmfi-cli.py (-fc FRIENDCODE | -n NAME) [-c COLUMNS] [--no-min] [--no-max] [--no-avg] [--no-color] [-r] [-h] [-v]`
 
 | option (short) | option (long)               | description                                                                                                                                                                    |
 |----------------|-----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

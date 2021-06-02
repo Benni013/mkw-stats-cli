@@ -4,7 +4,7 @@ import re
 import sys
 import time
 import urllib.request
-
+from urllib.error import URLError
 import pandas
 
 
@@ -59,7 +59,7 @@ class colors:
 
 def main():
     parser = argparse.ArgumentParser(description='CLI MKWii Wiimmfi Statistics\n')
-    parser.add_argument('-v', '--version', action='version', version='0.1.1')
+    parser.add_argument('-v', '--version', action='version', version='0.2')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-fc', '--friendcode', help='use friend code', nargs=1)
     group.add_argument('-n', '--name', help='use name', nargs=1)
@@ -90,14 +90,22 @@ def main():
             exit(1)
     if args.friendcode:
         if re.match(r'^\d{4}-\d{4}-\d{4}$', args.friendcode[0]) is not None:
-            room_id = getRoomIDByFC(args.friendcode[0])
+            try:
+                room_id = getRoomIDByFC(args.friendcode[0])
+            except URLError:
+                print('No connection can be established to Wiimmfi', file=sys.stderr)
+                exit(1)
             out(room_id, args.friendcode[0], selection, disable, args.refresh)
         else:
             print('Format "XXXX-XXXX-XXXX" required', file=sys.stderr)
             exit(1)
     elif args.name:
-        fc = getFcByName(args.name[0])
-        room_id = getRoomIDByFC(fc)
+        try:
+            fc = getFcByName(args.name[0])
+            room_id = getRoomIDByFC(fc)
+        except URLError:
+            print('No connection can be established to Wiimmfi', file=sys.stderr)
+            exit(1)
         out(room_id, fc, selection, disable, args.refresh)
     else:
         parser.print_usage()
@@ -106,163 +114,165 @@ def main():
 def getRoomIDByFC(fc):
     with urllib.request.urlopen('https://wiimmfi.de/stats/mkw') as response:
         html = response.read().decode('utf-8')
-        ifc = html.find(fc)
-        if ifc != -1:
-            isid = html.rfind('<tr id="', 0, ifc) + 8
-            ieid = html.find('"', isid)
-            if isid != -1 and ieid != -1:
-                return html[isid:ieid]
-            else:
-                print('An error occurred', file=sys.stderr)
-                exit(1)
+    ifc = html.find(fc)
+    if ifc != -1:
+        isid = html.rfind('<tr id="', 0, ifc) + 8
+        ieid = html.find('"', isid)
+        if isid != -1 and ieid != -1:
+            return html[isid:ieid]
         else:
-            print('Friend code not found', file=sys.stderr)
+            print('An error occurred', file=sys.stderr)
             exit(1)
+    else:
+        print('Friend code not found', file=sys.stderr)
+        exit(1)
 
 
 def getFcByName(name):
     with urllib.request.urlopen('https://wiimmfi.de/stats/mkw') as response:
         html = response.read().decode('utf-8')
-        iname = []
-        for match in re.finditer(name, html):
-            s = match.start()
-            e = match.end()
-            iname.append((s, e))
-        inamefc = []
-        try:
-            if iname and len(iname) > 1:
-                print('Input the correct corresponding number to the desired player')
-                for i in range(0, len(iname)):
-                    isname, _ = iname[i]
-                    isidre = html.rfind('<tr class="tr', 0, isname)
-                    inamefc.append(re.findall(r'\d{4}-\d{4}-\d{4}', html[isidre:isname])[0])
-                    print(f'{i} for player "{name}" with friend code {inamefc[i]}')
-                return inputNumber(inamefc)
-            elif iname:
-                isname, _ = iname[0]
+    iname, inamefc = [], []
+    for match in re.finditer(name, html):
+        s = match.start()
+        e = match.end()
+        iname.append((s, e))
+    try:
+        if iname and len(iname) > 1:
+            output = 'Input the correct corresponding number to the desired player\n'
+            for i in range(0, len(iname)):
+                isname, _ = iname[i]
                 isidre = html.rfind('<tr class="tr', 0, isname)
                 inamefc.append(re.findall(r'\d{4}-\d{4}-\d{4}', html[isidre:isname])[0])
-                return inamefc[0]
-            else:
-                print('Name not found', file=sys.stderr)
-                exit(1)
-        except IndexError:
-            print('Error: Given name conflicts with website data', file=sys.stderr)
+                output += f'{i} for player "{name}" with friend code {inamefc[i]}\n'
+            print(output, end='')
+            return inputNumber(inamefc)
+        elif iname:
+            isname, _ = iname[0]
+            isidre = html.rfind('<tr class="tr', 0, isname)
+            inamefc.append(re.findall(r'\d{4}-\d{4}-\d{4}', html[isidre:isname])[0])
+            return inamefc[0]
+        else:
+            print('Name not found', file=sys.stderr)
             exit(1)
+    except IndexError:
+        print('Given name conflicts with website data', file=sys.stderr)
+        exit(1)
 
 
-def inputNumber(inamefc):
+# function to select player if wanted player name occurs multiple times
+def inputNumber(inamefc, line_count=2):
     number = input('Number: ')
-    if number.isdigit():
-        if int(number) < len(inamefc):
-            sys.stdout.write('\x1B[1A\x1B[2K' * (len(inamefc) + 2))
-            sys.stdout.flush()
-            return inamefc[int(number)]
+    if number.isdigit() and int(number) < len(inamefc):
+        sys.stdout.write('\x1B[1A\x1B[2K' * (len(inamefc) + line_count))
+        sys.stdout.flush()
+        return inamefc[int(number)]
     else:
         print('invalid input, try again')
-        inputNumber(inamefc)
+        inputNumber(inamefc, line_count + 2)
 
 
 def parseRoom(room_id, fc, selection, no_rows):
-    url = rf'https://wiimmfi.de/stats/mkw/room/{room_id}'
+    # read HTML table from Wiimmfi
     try:
-        tables = pandas.read_html(url, header=1, encoding='utf-8')
-        if len(tables) == 0:
-            print("The room does not exist")
-            exit(1)
-        table = tables[0]
-        extra_line_count = 1
+        tables = pandas.read_html(rf'https://wiimmfi.de/stats/mkw/room/{room_id}', header=1, encoding='utf-8')
+    except ValueError:
+        print('The room does not exist', file=sys.stderr)
+        exit(1)
+    table = tables[0]
+    extra_line_count = 1
 
-        # calculate Average line
-        vr_avg, br_avg, guest_count = 0, 0, 0
-        for vr, br, name in zip(table['versuspoints'], table['battlepoints'], table['Mii name']):
-            try:
-                vr_avg += vr
-                br_avg += br
-                if '1. ' in name and '2. ' in name:
-                    guest_count += 1
-                    vr_avg += 5000
-                    br_avg += 5000
-            except TypeError:
+    # calculate Average line
+    vr_avg, br_avg, guest_count = 0, 0, 0
+    for vr, br, name in zip(table['versuspoints'], table['battlepoints'], table['Mii name']):
+        try:
+            vr_avg += int(vr)
+            br_avg += int(br)
+            if '1. ' in name and '2. ' in name:
+                guest_count += 1
                 vr_avg += 5000
                 br_avg += 5000
-        vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
-        br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
-        if vr_avg == 5000 and br_avg == 5000:
-            vr_avg, br_avg = '—', '—'
-        loginregion, ihost = '—', 0
-        for i in range(0, len(table['role'])):
-            if 'HOST' in table['role'][i]:
-                loginregion = table['loginregion'][i]
-                ihost = i
-                break
-
-        # calculate Max loss and Max gain line
-        iplayer, imin, imax = -1, -1, -1
-        try:
-            iplayer = table[table['friend code'] == fc].index.item()
-            player_vr = table['versuspoints'][iplayer]
-            player_br = table['battlepoints'][iplayer]
-            min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
-            for i in range(0, len(table)):
-                # separate guest with space
-                name = str(table['Mii name'][i])
-                if '1. ' in name and '2. ' in name:
-                    table.loc[table['Mii name'] == name, 'Mii name'] = name.replace('2. ', ' 2. ')
-                # actual calculation
-                try:
-                    if i != iplayer and ('viewer' not in table['role'][i] and 'connect' not in table['role'][i]):
-                        min_vr -= calcVR(table['versuspoints'][i], player_vr)
-                        max_vr += calcVR(player_vr, table['versuspoints'][i])
-                        min_br -= calcVR(table['battlepoints'][i], player_br)
-                        max_br += calcVR(player_br, table['battlepoints'][i])
-                        if '1. ' in name and '2. ' in name:
-                            min_vr -= calcVR(5000, player_vr)
-                            max_vr += calcVR(player_vr, 5000)
-                            min_br -= calcVR(5000, player_br)
-                            max_br += calcVR(player_br, 5000)
-                except TypeError:
-                    pass
-            table = table.append({'friend code': 'Max loss', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
-            table = table.append({'friend code': 'Max gain', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
-            imin = table[table['friend code'] == 'Max loss'].index.item()
-            imax = table[table['friend code'] == 'Max gain'].index.item()
         except ValueError:
-            print('The sought-after player is no longer in this room')
-            extra_line_count += 1
-        table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
-        iavg = table[table['friend code'] == 'Average rating'].index.item()
+            vr_avg += 5000
+            br_avg += 5000
+    vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
+    br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
+    if vr_avg == 5000 and br_avg == 5000:
+        vr_avg, br_avg = '—', '—'
+    # use loginregion from host
+    loginregion, ihost = '—', 0
+    for i in range(0, len(table['role'])):
+        if 'HOST' in table['role'][i]:
+            loginregion = table['loginregion'][i]
+            ihost = i
+            break
 
-        # output table
-        output = table.iloc[:, selection].to_string().splitlines()
-        no_color, no_min, no_max, no_avg = no_rows
-        # This part of the code is a complete mess, but it works.
-        for i in range(0, len(output)):
-            # If the player is no longer in the room, iplayer will be equal to -1, so the header of the table will be blue. It's not a bug, it's a feature
-            if i - 1 == iplayer:
-                print(f'{colors.fg.brightblue}{output[i]}{colors.reset}') if not no_color else print(output[i])
-            elif i - 1 == imin:
-                if not no_min:
-                    print(f'{colors.fg.red}{output[i]}{colors.reset}') if not no_color else print(output[i])
-                else:
-                    extra_line_count -= 1
-            elif i - 1 == imax:
-                if not no_max:
-                    print(f'{colors.fg.green}{output[i]}{colors.reset}') if not no_color else print(output[i])
-                else:
-                    extra_line_count -= 1
-            elif i - 1 == iavg:
-                if not no_avg:
-                    print(f'{colors.fg.yellow}{output[i]}{colors.reset}') if not no_color else print(output[i])
-                else:
-                    extra_line_count -= 1
+    # calculate Max loss and Max gain line
+    iplayer, imin, imax = -1, -1, -1
+    try:
+        iplayer = table[table['friend code'] == fc].index.item()
+        player_vr = int(table['versuspoints'][iplayer])
+        player_br = int(table['battlepoints'][iplayer])
+        min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
+        for i in range(0, len(table)):
+            # separate guest with space
+            name = str(table['Mii name'][i])
+            if '1. ' in name and '2. ' in name:
+                table.loc[table['Mii name'] == name, 'Mii name'] = name.replace('2. ', ' 2. ')
+            # actual calculation
+            try:
+                if i != iplayer and not any(x in table['role'][i] for x in ['viewer', 'connect']):
+                    min_vr -= calcVR(int(table['versuspoints'][i]), player_vr)
+                    max_vr += calcVR(player_vr, int(table['versuspoints'][i]))
+                    min_br -= calcVR(int(table['battlepoints'][i]), player_br)
+                    max_br += calcVR(player_br, int(table['battlepoints'][i]))
+                    if '1. ' in name and '2. ' in name:
+                        min_vr -= calcVR(5000, player_vr)
+                        max_vr += calcVR(player_vr, 5000)
+                        min_br -= calcVR(5000, player_br)
+                        max_br += calcVR(player_br, 5000)
+            except ValueError:
+                pass
+        table = table.append({'friend code': 'Max loss', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
+        table = table.append({'friend code': 'Max gain', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': max_vr, 'battlepoints': max_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
+        imin = table[table['friend code'] == 'Max loss'].index.item()
+        imax = table[table['friend code'] == 'Max gain'].index.item()
+    except ValueError:
+        if not vr_avg == '—' and br_avg == '—':
+            print('The wanted player is no longer in this room')
+        extra_line_count += 1
+    table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
+    iavg = table[table['friend code'] == 'Average rating'].index.item()
+
+    # output table
+    output = table.iloc[:, selection].to_string().splitlines()
+    no_color, no_min, no_max, no_avg = no_rows
+    # This part of the code is a complete mess, but it works.
+    for i in range(0, len(output)):
+        # If the player is no longer in the room, iplayer will be equal to -1, so the header of the table will be blue.
+        # If the player is in a private room, imax will be -1 but iplayer won't be -1 , so the header of the table will be green. It's not a bug, it's a feature.
+        if i - 1 == iplayer:
+            print(f'{colors.fg.brightblue}{output[i]}{colors.reset}') if not no_color else print(output[i])
+        elif i - 1 == imax:
+            if not no_max:
+                print(f'{colors.fg.green}{output[i]}{colors.reset}') if not no_color else print(output[i])
             else:
-                print(output[i])
-        return len(table) + extra_line_count
-    except ImportError:
-        return 0
+                extra_line_count -= 1
+        elif i - 1 == imin:
+            if not no_min:
+                print(f'{colors.fg.red}{output[i]}{colors.reset}') if not no_color else print(output[i])
+            else:
+                extra_line_count -= 1
+        elif i - 1 == iavg:
+            if not no_avg:
+                print(f'{colors.fg.yellow}{output[i]}{colors.reset}') if not no_color else print(output[i])
+            else:
+                extra_line_count -= 1
+        else:
+            print(output[i])
+    return len(table) + extra_line_count
 
 
+# function to process the refresh option
 def out(room_id, fc, selection, disable, refresh):
     line_count = parseRoom(room_id, fc, selection, disable)
     while refresh:
