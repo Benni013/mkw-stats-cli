@@ -237,9 +237,9 @@ def parseRoom(room_id, fc, selection, no_rows):
         imin = table[table['friend code'] == 'Max loss'].index.item()
         imax = table[table['friend code'] == 'Max gain'].index.item()
     except ValueError:
-        if not vr_avg == '—' and br_avg == '—':
+        if not (vr_avg == '—' and br_avg == '—'):
             print('The wanted player is no longer in this room')
-        extra_line_count += 1
+            extra_line_count += 1
     table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
     iavg = table[table['friend code'] == 'Average rating'].index.item()
 
