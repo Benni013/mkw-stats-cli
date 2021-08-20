@@ -5,6 +5,7 @@ import sys
 import time
 import urllib.request
 from urllib.error import URLError
+
 import pandas
 
 
@@ -59,7 +60,7 @@ class colors:
 
 def main():
     parser = argparse.ArgumentParser(description='CLI MKWii Wiimmfi Statistics\n')
-    parser.add_argument('-v', '--version', action='version', version='0.2')
+    parser.add_argument('-v', '--version', action='version', version='0.2.1')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-fc', '--friendcode', help='use friend code', nargs=1)
     group.add_argument('-n', '--name', help='use name', nargs=1)
@@ -87,25 +88,25 @@ def main():
             selection = list(set(selection) ^ set(range(int(in_start), int(in_end) + 1)))
         else:
             print('invalid selection input', file=sys.stderr)
-            exit(1)
+            sys.exit(1)
     if args.friendcode:
         if re.match(r'^\d{4}-\d{4}-\d{4}$', args.friendcode[0]) is not None:
             try:
                 room_id = getRoomIDByFC(args.friendcode[0])
             except URLError:
                 print('No connection can be established to Wiimmfi', file=sys.stderr)
-                exit(1)
+                sys.exit(1)
             out(room_id, args.friendcode[0], selection, disable, args.refresh)
         else:
             print('Format "XXXX-XXXX-XXXX" required', file=sys.stderr)
-            exit(1)
+            sys.exit(1)
     elif args.name:
         try:
             fc = getFcByName(args.name[0])
             room_id = getRoomIDByFC(fc)
         except URLError:
             print('No connection can be established to Wiimmfi', file=sys.stderr)
-            exit(1)
+            sys.exit(1)
         out(room_id, fc, selection, disable, args.refresh)
     else:
         parser.print_usage()
@@ -122,10 +123,10 @@ def getRoomIDByFC(fc):
             return html[isid:ieid]
         else:
             print('An error occurred', file=sys.stderr)
-            exit(1)
+            sys.exit(1)
     else:
         print('Friend code not found', file=sys.stderr)
-        exit(1)
+        sys.exit(1)
 
 
 def getFcByName(name):
@@ -153,10 +154,10 @@ def getFcByName(name):
             return inamefc[0]
         else:
             print('Name not found', file=sys.stderr)
-            exit(1)
+            sys.exit(1)
     except IndexError:
         print('Given name conflicts with website data', file=sys.stderr)
-        exit(1)
+        sys.exit(1)
 
 
 # function to select player if wanted player name occurs multiple times
@@ -177,13 +178,13 @@ def parseRoom(room_id, fc, selection, no_rows):
         tables = pandas.read_html(rf'https://wiimmfi.de/stats/mkw/room/{room_id}', header=1, encoding='utf-8')
     except ValueError:
         print('The room does not exist', file=sys.stderr)
-        exit(1)
+        sys.exit(1)
     table = tables[0]
     extra_line_count = 1
 
     # calculate Average line
-    vr_avg, br_avg, guest_count = 0, 0, 0
-    for vr, br, name in zip(table['versuspoints'], table['battlepoints'], table['Mii name']):
+    vr_avg = br_avg = guest_count = 0
+    for vr, br, name in zip(table['versuspoints'], table['battlepoints'], str(table['Mii name'])):
         try:
             vr_avg += int(vr)
             br_avg += int(br)
@@ -197,7 +198,7 @@ def parseRoom(room_id, fc, selection, no_rows):
     vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
     br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
     if vr_avg == 5000 and br_avg == 5000:
-        vr_avg, br_avg = '—', '—'
+        vr_avg = br_avg = '—'
     # use loginregion from host
     loginregion, ihost = '—', 0
     for i in range(0, len(table['role'])):
@@ -207,12 +208,12 @@ def parseRoom(room_id, fc, selection, no_rows):
             break
 
     # calculate Max loss and Max gain line
-    iplayer, imin, imax = -1, -1, -1
+    iplayer = imin = imax = -1
     try:
         iplayer = table[table['friend code'] == fc].index.item()
         player_vr = int(table['versuspoints'][iplayer])
         player_br = int(table['battlepoints'][iplayer])
-        min_vr, max_vr, min_br, max_br = 0, 0, 0, 0
+        min_vr = max_vr = min_br = max_br = 0
         for i in range(0, len(table)):
             # separate guest with space
             name = str(table['Mii name'][i])
@@ -220,16 +221,17 @@ def parseRoom(room_id, fc, selection, no_rows):
                 table.loc[table['Mii name'] == name, 'Mii name'] = name.replace('2. ', ' 2. ')
             # actual calculation
             try:
-                if i != iplayer and not any(x in table['role'][i] for x in ['viewer', 'connect']):
-                    min_vr -= calcVR(int(table['versuspoints'][i]), player_vr)
-                    max_vr += calcVR(player_vr, int(table['versuspoints'][i]))
-                    min_br -= calcVR(int(table['battlepoints'][i]), player_br)
-                    max_br += calcVR(player_br, int(table['battlepoints'][i]))
+                if not any(x in table['role'][i] for x in ['viewer', 'connect']):
                     if '1. ' in name and '2. ' in name:
                         min_vr -= calcVR(5000, player_vr)
                         max_vr += calcVR(player_vr, 5000)
                         min_br -= calcVR(5000, player_br)
                         max_br += calcVR(player_br, 5000)
+                    if i != iplayer:
+                        min_vr -= calcVR(int(table['versuspoints'][i]), player_vr)
+                        max_vr += calcVR(player_vr, int(table['versuspoints'][i]))
+                        min_br -= calcVR(int(table['battlepoints'][i]), player_br)
+                        max_br += calcVR(player_br, int(table['battlepoints'][i]))
             except ValueError:
                 pass
         table = table.append({'friend code': 'Max loss', 'role': table['role'][iplayer], 'loginregion': table['loginregion'][iplayer], 'room,match': table['room,match'][iplayer], 'world': table['world'][iplayer], 'connfail': table['connfail'][iplayer], 'versuspoints': min_vr, 'battlepoints': min_br, 'Mii name': table['Mii name'][iplayer]}, ignore_index=True)
@@ -283,7 +285,7 @@ def out(room_id, fc, selection, disable, refresh):
             line_count = parseRoom(room_id, fc, selection, disable)
         except KeyboardInterrupt:
             print('\nExiting...')
-            exit(0)
+            sys.exit(0)
 
 
 # vr function from http://wiki.tockdom.com/wiki/Player_Rating
@@ -315,4 +317,4 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         print('\nInterrupt signal received')
-        exit(130)
+        sys.exit(130)
