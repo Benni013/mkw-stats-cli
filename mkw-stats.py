@@ -59,7 +59,7 @@ class colors:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='CLI MKWii Wiimmfi Statistics\n')
+    parser = argparse.ArgumentParser(description='MKWii Statistics CLI\n')
     parser.add_argument('-v', '--version', action='version', version='0.2.1')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-fc', '--friendcode', help='use friend code', nargs=1)
@@ -180,35 +180,35 @@ def parseRoom(room_id, fc, selection, no_rows):
         print('The room does not exist', file=sys.stderr)
         sys.exit(1)
     table = tables[0]
-    extra_line_count = 1
 
     # calculate Average line
-    vr_avg = br_avg = guest_count = 0
+    vr_avg = br_avg = additional_players = 0
     for vr, br, name in zip(table['versuspoints'], table['battlepoints'], str(table['Mii name'])):
-        try:
+        if (vr != '—') and (br != '—'):
             vr_avg += int(vr)
             br_avg += int(br)
             if '1. ' in name and '2. ' in name:
-                guest_count += 1
+                additional_players += 1
                 vr_avg += 5000
                 br_avg += 5000
-        except ValueError:
-            vr_avg += 5000
-            br_avg += 5000
-    vr_avg = round(vr_avg / (len(table['versuspoints']) + guest_count))
-    br_avg = round(br_avg / (len(table['battlepoints']) + guest_count))
-    if vr_avg == 5000 and br_avg == 5000:
+        else:
+            additional_players -= 1
+    if vr_avg == 0 and br_avg == 0:
         vr_avg = br_avg = '—'
-    # use loginregion from host
-    loginregion, ihost = '—', 0
-    for i in range(0, len(table['role'])):
+    else:
+        vr_avg = round(vr_avg / (table.shape[0] + additional_players))
+        br_avg = round(br_avg / (table.shape[0] + additional_players))
+
+    # get host index
+    ihost = 0
+    for i in range(0, table.shape[0]):
         if 'HOST' in table['role'][i]:
-            loginregion = table['loginregion'][i]
             ihost = i
             break
 
     # calculate Max loss and Max gain line
     iplayer = imin = imax = -1
+    extra_line_count = 1
     try:
         iplayer = table[table['friend code'] == fc].index.item()
         player_vr = int(table['versuspoints'][iplayer])
@@ -242,7 +242,7 @@ def parseRoom(room_id, fc, selection, no_rows):
         if not (vr_avg == '—' and br_avg == '—'):
             print('The wanted player is no longer in this room')
             extra_line_count += 1
-    table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': loginregion, 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
+    table = table.append({'friend code': 'Average rating', 'role': '—', 'loginregion': table['loginregion'][ihost], 'room,match': table['room,match'][ihost], 'world': '—', 'connfail': '—', 'versuspoints': vr_avg, 'battlepoints': br_avg, 'Mii name': '—'}, ignore_index=True)
     iavg = table[table['friend code'] == 'Average rating'].index.item()
 
     # output table
@@ -271,7 +271,7 @@ def parseRoom(room_id, fc, selection, no_rows):
                 extra_line_count -= 1
         else:
             print(output[i])
-    return len(table) + extra_line_count
+    return table.shape[0] + extra_line_count
 
 
 # function to process the refresh option
@@ -307,7 +307,7 @@ def f(x):
 def k(x):
     S = [0, 0, 0, 1, 8, 50, 125, 125, 125, 125]
     vr = 0
-    for j in range(0, 9):
+    for j in range(0, 10):
         vr += f(abs((x - 2) / 5000 - (j - 4))) * S[j]
     return vr
 

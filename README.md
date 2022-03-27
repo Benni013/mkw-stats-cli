@@ -1,11 +1,13 @@
-# wiimmfi-cli
-command-line interface to display the stats of a Wiimmfi room in Mario Kart Wii
+# MKW Statistics CLI (obsolete)
+Command-line interface to display the stats of a Wiimmfi room in Mario Kart Wii
+
+Because of a DDOS attack against the Wiimmfi servers, DDOS protection was enabled. Thus, this program no longer works. That's why I decided to develop a browser extension to display additional statistics. You can find an unsigned version for Firefox and Chromium browsers in the releases section.
 
 * [REQUIREMENTS](#requirements)
 * [USAGE](#usage)
 
 ## Requirements
-* Python version 3.7.1 and above
+* Python version 3.8 and above
 #### Python libraries
 * [pandas and its dependencies](https://pandas.pydata.org/docs/getting_started/install.html):
   * beautifulsoup4
@@ -14,7 +16,7 @@ command-line interface to display the stats of a Wiimmfi room in Mario Kart Wii
   * bottleneck (recommended)
 
 ## Usage
-`./wiimmfi-cli.py (-fc FRIENDCODE | -n NAME) [-c COLUMNS] [--no-min] [--no-max] [--no-avg] [--no-color] [-r] [-h] [-v]`
+`./mkw-stats.py (-fc FRIENDCODE | -n NAME) [-c COLUMNS] [--no-min] [--no-max] [--no-avg] [--no-color] [-r] [-h] [-v]`
 
 | option (short) | option (long)               | description                                                                                                                                                                    |
 |----------------|-----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
